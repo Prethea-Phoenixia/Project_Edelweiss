@@ -8,6 +8,7 @@ G = 6.67428e-11
 #object-property
 #
 printout = 'false'
+attempt = 0
 
 class Vector():
 
@@ -136,6 +137,8 @@ class Body():
 def Guidance(bodies,step):
 
       global printout
+      global attempt
+      ini = 0
       
       for item in bodies:
 
@@ -188,16 +191,29 @@ def Guidance(bodies,step):
 
                   thrust_force = Vector.define(0,0)
 
-            elif Vector.abs(velocity_relative) >  15:
+            elif Vector.abs(velocity_relative) >  10:
                   
                   thrust_force = Vector.mul(Vector.rev(Vector.ref(velocity_relative)),spacecraft.thrust)
 
             else:
 
-                  spacecraft.phase = 'evaluation'
+                  spacecraft.phase = 'terminal'
 
                   thrust_force = Vector.define(0,0)
                   
+            return thrust_force
+
+      def terminal(spacecraft,primary):
+
+            if d < primary.radius + 100 and d > primary.radius + 1:
+
+                  acc_target = Vector.abs(velocity_relative) ** 2 / ((d-primary.radius)*2) + 1.625 #lunar gravity
+                  thrust_force = Vector.mul(Vector.rev(Vector.ref(velocity_relative)),spacecraft.mass * acc_target)
+                  
+            else:
+                  thrust_force = Vector.define(0,0)
+                  spacecraft.phase = 'evaluation'
+
             return thrust_force
 
 
@@ -209,14 +225,20 @@ def Guidance(bodies,step):
 
       if spacecraft.phase == 'freefall':
 
-
             thrust_force = freefall(primary,spacecraft,step)
             
             return thrust_force
 
+      if spacecraft.phase == 'terminal':
+
+            thrust_force = terminal(spacecraft,primary)
+            return thrust_force
+      
       if spacecraft.phase == 'evaluation':
 
-            if d>(primary.radius + 2) :
+            attempt += 1
+            
+            if d>=primary.radius + 1 :
                   #premature
                   #reverting
 
@@ -228,48 +250,41 @@ def Guidance(bodies,step):
 
                   primary.vel = primary.refvel
                   primary.pos = primary.refpos
-                  
 
-                  if d-primary.radius >=100000:
+                  thrust_force = Vector.define(0,0)
 
-                        spacecraft.stepcounter += int(d-primary.radius/1600)
+                  spacecraft.stepcounter += 1
 
-                        printout = 'false'
-
-
-                  elif d-primary.radius >=1000:
-                        
-                        spacecraft.stepcounter += 2
-
-                        printout = 'false'
-
-                  elif d-primary.radius >=5:
-                  
-                        spacecraft.stepcounter += 1
-
-                        printout = 'true'
-
-            elif d < primary.radius:
+            elif d < primary.radius - 1 :
                   print("overshoot")
+                  update_info(bodies,step)
                   print(spacecraft.mass)
                   exit()
             else:
                   print("success")
-                  print(spacecraft.mass)
+                  update_info(bodies,step)
                   exit()
 
-            return Vector.define(0,0)
+            return thrust_force
 
       
                   
 def update_info(bodies,tick):
 
+      global attempt
+      
+
       print("\n\n","{0:^7}".format(tick))
+      print("no.",attempt)
       
       for body in bodies:
+
+            if body.name == 'moon':
+                  continue
             print(body.name)
             Vector.print(body.pos)
             Vector.print(body.vel)
+            print(body.mass)
 
       #time.sleep(0.1)
 
@@ -279,7 +294,7 @@ def EulerInt(bodies):
 
       global printout
 
-      timestep = 1
+      timestep = 0.5
       tick = 0
       step = 0
       
@@ -296,7 +311,7 @@ def EulerInt(bodies):
                         body.currentstep = step
                         thrust_force = Guidance(bodies,step)
                         step = body.currentstep
-                        body.mass -= (Vector.abs(thrust_force)/(body.isp*9.8))
+                        body.mass -= (Vector.abs(thrust_force)/(body.isp*9.8)) * timestep
                         body.force = Vector.add(thrust_force,body.force)
                         pass
                   
@@ -320,7 +335,7 @@ def EulerInt(bodies):
             tick += timestep
             step += 1
 
-            if step % 1 ==0 and printout == 'true':
+            if step % 2 ==0 and printout == 'true':
                   update_info(bodies,tick)
                  
                         
